@@ -109,8 +109,53 @@
     if (!_afc || !path) {
         return NO;
     }
-    
+
     afc_error_t afc_error = afc_remove_path(_afc, cPath);
+    return afc_error == AFC_E_SUCCESS;
+}
+
+- (BOOL)write:(NSString *)path data:(NSData *)data {
+    const char *cPath = [path cStringUsingEncoding:NSUTF8StringEncoding];
+    if (!_afc || !path || !data) {
+        return NO;
+    }
+
+    uint64_t handle;
+    afc_error_t afc_error = afc_file_open(_afc, cPath, AFC_FOPEN_WRONLY, &handle);
+    if (afc_error != AFC_E_SUCCESS) {
+        NSLog(@"ERROR: Unable to open device file '%s' for writing (%d)", cPath, afc_error);
+        return NO;
+    }
+
+    const NSUInteger chunkSize = 0x10000;
+    const char *bytes = (const char *)data.bytes;
+    NSUInteger remaining = data.length;
+    uint32_t offset = 0;
+
+    while (remaining > 0) {
+        uint32_t toWrite = (uint32_t)MIN(remaining, chunkSize);
+        uint32_t bytesWritten = 0;
+        afc_error = afc_file_write(_afc, handle, bytes + offset, toWrite, &bytesWritten);
+        if (afc_error != AFC_E_SUCCESS) {
+            NSLog(@"ERROR: Failed to write to device file '%s' (%d)", cPath, afc_error);
+            afc_file_close(_afc, handle);
+            return NO;
+        }
+        offset += bytesWritten;
+        remaining -= bytesWritten;
+    }
+
+    afc_file_close(_afc, handle);
+    return YES;
+}
+
+- (BOOL)makeDirectory:(NSString *)path {
+    const char *cPath = [path cStringUsingEncoding:NSUTF8StringEncoding];
+    if (!_afc || !path) {
+        return NO;
+    }
+
+    afc_error_t afc_error = afc_make_directory(_afc, cPath);
     return afc_error == AFC_E_SUCCESS;
 }
 

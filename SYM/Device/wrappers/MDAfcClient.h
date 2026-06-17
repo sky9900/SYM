@@ -39,6 +39,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (nullable NSString *)readUTF8String:(NSString *)path;
 
 - (BOOL)remove:(NSString *)path;
+- (BOOL)write:(NSString *)path data:(NSData *)data;
+- (BOOL)makeDirectory:(NSString *)path;
 
 @end
 

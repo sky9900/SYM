@@ -11,7 +11,7 @@
         <scene sceneID="lcl-PR-s56">
             <objects>
                 <windowController showSeguePresentationStyle="single" id="80I-OT-2ZW" sceneMemberID="viewController">
-                    <window key="window" title="File Browser" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="" animationBehavior="default" id="17R-xP-ffZ">
+                    <window key="window" title="File Browser" allowsToolTipsWhenApplicationIsInactive="NO" autorecalculatesKeyViewLoop="NO" releasedWhenClosed="NO" visibleAtLaunch="NO" frameAutosaveName="FileBrowserWindow" animationBehavior="default" id="17R-xP-ffZ">
                         <windowStyleMask key="styleMask" titled="YES" closable="YES" miniaturizable="YES" resizable="YES"/>
                         <rect key="contentRect" x="245" y="301" width="800" height="270"/>
                         <rect key="screenRect" x="0.0" y="0.0" width="1680" height="1025"/>
@@ -52,10 +52,18 @@
                                         <action selector="removeFile:" target="IOy-ac-Qu3" id="1VY-Hd-4DW"/>
                                     </connections>
                                 </toolbarItem>
+                                <toolbarItem implicitItemIdentifier="A1B2C3D4-E5F6-7890-ABCD-EF1234567890" explicitItemIdentifier="ToolbarItemImport" label="Import" paletteLabel="Import" tag="-1" image="square.and.arrow.down" catalog="system" id="Imp-Tb-Btn">
+                                    <size key="minSize" width="35.5" height="30"/>
+                                    <size key="maxSize" width="35.5" height="30"/>
+                                    <connections>
+                                        <action selector="didClickImportButton:" target="IOy-ac-Qu3" id="Imp-Act-001"/>
+                                    </connections>
+                                </toolbarItem>
                             </allowedToolbarItems>
                             <defaultToolbarItems>
                                 <toolbarItem reference="94a-ji-XOP"/>
                                 <toolbarItem reference="RcY-vv-ZEn"/>
+                                <toolbarItem reference="Imp-Tb-Btn"/>
                                 <toolbarItem reference="U4o-wo-THR"/>
                                 <toolbarItem reference="Z8a-qL-5jv"/>
                             </defaultToolbarItems>
@@ -387,7 +395,7 @@
                                     <rect key="frame" x="1" y="1" width="653" height="48"/>
                                     <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                     <subviews>
-                                        <outlineView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" alternatingRowBackgroundColors="YES" multipleSelection="NO" autosaveColumns="NO" rowHeight="24" rowSizeStyle="systemDefault" headerView="s9e-Vo-2rB" viewBased="YES" indentationPerLevel="16" outlineTableColumn="aG9-OQ-xEl" id="UzX-Qr-ULd">
+                                        <outlineView verticalHuggingPriority="750" ambiguous="YES" allowsExpansionToolTips="YES" columnAutoresizingStyle="lastColumnOnly" alternatingRowBackgroundColors="YES" multipleSelection="YES" autosaveColumns="NO" rowHeight="24" rowSizeStyle="systemDefault" headerView="s9e-Vo-2rB" viewBased="YES" indentationPerLevel="16" outlineTableColumn="aG9-OQ-xEl" id="UzX-Qr-ULd">
                                             <rect key="frame" x="0.0" y="0.0" width="653" height="23"/>
                                             <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
                                             <size key="intercellSpacing" width="3" height="2"/>

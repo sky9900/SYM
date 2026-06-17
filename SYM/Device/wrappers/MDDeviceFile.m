@@ -82,7 +82,7 @@
         if (!data) {
             return;
         }
-        
+
         [data writeToFile:path atomically:YES];
         return;
     }
@@ -99,7 +99,7 @@
         NSLog(@"ERROR: create directory failed: %@ existed", path);
         return;
     }
-    
+
     NSArray *children = self.children;
     if (children.count == 0) {
         return;
@@ -108,6 +108,52 @@
         NSString *filePath = [path stringByAppendingPathComponent:file.name];
         [file copy:filePath];
     }
+}
+
+- (BOOL)uploadFromLocalPath:(NSString *)localPath {
+    if (!self.afcClient) {
+        return NO;
+    }
+
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    BOOL isDirectory;
+    if (![fileManager fileExistsAtPath:localPath isDirectory:&isDirectory]) {
+        return NO;
+    }
+
+    NSString *fileName = [localPath lastPathComponent];
+    NSString *remotePath;
+    if ([self.path isEqualToString:@"."]) {
+        remotePath = fileName;
+    } else {
+        remotePath = [self.path stringByAppendingPathComponent:fileName];
+    }
+
+    if (!isDirectory) {
+        NSData *data = [NSData dataWithContentsOfFile:localPath];
+        if (!data) {
+            NSLog(@"ERROR: Unable to read local file '%@'", localPath);
+            return NO;
+        }
+        return [self.afcClient write:remotePath data:data];
+    }
+
+    if (![self.afcClient makeDirectory:remotePath]) {
+        NSLog(@"ERROR: Unable to create directory '%@' on device", remotePath);
+        return NO;
+    }
+
+    NSArray *contents = [fileManager contentsOfDirectoryAtPath:localPath error:nil];
+    for (NSString *item in contents) {
+        NSString *localItemPath = [localPath stringByAppendingPathComponent:item];
+        MDDeviceFile *remoteDir = [[MDDeviceFile alloc] initWithAfcClient:self.afcClient];
+        remoteDir.path = remotePath;
+        remoteDir.isDirectory = YES;
+        if (![remoteDir uploadFromLocalPath:localItemPath]) {
+            return NO;
+        }
+    }
+    return YES;
 }
 
 - (BOOL)remove {

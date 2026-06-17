@@ -43,9 +43,112 @@ class FileBrowserViewController: NSViewController, LoadingAble {
 
     private var rootDir: MDDeviceFile!
     private var afcClient: MDAfcClient!
+    private var refreshTimer: DispatchSourceTimer?
 
     override func viewDidLoad() {
         super.viewDidLoad()
+    }
+
+    override func viewWillDisappear() {
+        super.viewWillDisappear()
+        stopRefreshTimer()
+    }
+
+    deinit {
+        stopRefreshTimer()
+    }
+
+    private func startRefreshTimer() {
+        stopRefreshTimer()
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + 10, repeating: 10)
+        timer.setEventHandler { [weak self] in
+            self?.autoRefresh()
+        }
+        refreshTimer = timer
+        timer.resume()
+    }
+
+    private func stopRefreshTimer() {
+        refreshTimer?.cancel()
+        refreshTimer = nil
+    }
+
+    private func autoRefresh() {
+        guard let deviceID = self.deviceID, let appID = self.appID else { return }
+
+        var expandedPaths: Set<String> = []
+        collectExpandedPaths(item: nil, into: &expandedPaths)
+
+        DispatchQueue.global().async { [weak self] in
+            guard let self = self else { return }
+            let lockdown = MDLockdown(udid: deviceID)
+            let houseArrest = MDHouseArrest(lockdown: lockdown, appID: appID)
+            let afcClient = MDAfcClient.fileClient(with: houseArrest)
+            let rootDir = MDDeviceFile(afcClient: afcClient)
+            rootDir.path = "."
+            rootDir.isDirectory = true
+            _ = rootDir.children
+
+            self.preloadExpandedPaths(item: rootDir, expandedPaths: expandedPaths)
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+                self.afcClient = afcClient
+                self.rootDir = rootDir
+                self.outlineView.reloadData()
+                self.restoreExpanded(item: nil, expandedPaths: expandedPaths)
+            }
+        }
+    }
+
+    private func collectExpandedPaths(item: Any?, into paths: inout Set<String>) {
+        let count: Int
+        if let file = item as? MDDeviceFile {
+            if !outlineView.isItemExpanded(file) { return }
+            paths.insert(file.path)
+            count = outlineView.numberOfChildren(ofItem: file)
+        } else {
+            count = outlineView.numberOfChildren(ofItem: nil)
+        }
+        for i in 0..<count {
+            let child = item == nil
+                ? outlineView.child(i, ofItem: nil)
+                : outlineView.child(i, ofItem: item)
+            collectExpandedPaths(item: child, into: &paths)
+        }
+    }
+
+    private func preloadExpandedPaths(item: MDDeviceFile, expandedPaths: Set<String>) {
+        if item.isDirectory && expandedPaths.contains(item.path) {
+            _ = item.children
+        }
+        if let children = item.children {
+            for child in children {
+                if child.isDirectory {
+                    preloadExpandedPaths(item: child, expandedPaths: expandedPaths)
+                }
+            }
+        }
+    }
+
+    private func restoreExpanded(item: Any?, expandedPaths: Set<String>) {
+        let count: Int
+        if let file = item as? MDDeviceFile {
+            count = outlineView.numberOfChildren(ofItem: file)
+        } else {
+            count = outlineView.numberOfChildren(ofItem: nil)
+        }
+        for i in 0..<count {
+            let child = item == nil
+                ? outlineView.child(i, ofItem: nil)
+                : outlineView.child(i, ofItem: item)
+            if let file = child as? MDDeviceFile, file.isDirectory,
+               expandedPaths.contains(file.path) {
+                outlineView.expandItem(file)
+                restoreExpanded(item: file, expandedPaths: expandedPaths)
+            }
+        }
     }
 
     func reloadData(withDeviceID deviceID: String?, appID: String?) {
@@ -57,6 +160,7 @@ class FileBrowserViewController: NSViewController, LoadingAble {
         self.appID = appID
 
         if deviceID == nil || appID == nil {
+            stopRefreshTimer()
             rootDir = nil
             outlineView.reloadData()
             return
@@ -70,20 +174,61 @@ class FileBrowserViewController: NSViewController, LoadingAble {
             let rootDir = MDDeviceFile(afcClient: afcClient)
             rootDir.path = "."
             rootDir.isDirectory = true
-            _ = rootDir.children // preload children
+            _ = rootDir.children
 
             DispatchQueue.main.async {
                 self.afcClient = afcClient
                 self.rootDir = rootDir
                 self.outlineView.reloadData()
                 self.hideLoading()
+                self.startRefreshTimer()
             }
         }
     }
 
     @IBAction func didClickExportButton(_: NSButton) {
-        let row = outlineView.selectedRow
-        exportFile(atIndex: row)
+        exportSelectedFiles()
+    }
+
+    @IBAction func openFile(_: AnyObject?) {
+        exportSelectedFiles()
+    }
+
+    private func exportSelectedFiles() {
+        let selectedRows = outlineView.selectedRowIndexes
+        guard !selectedRows.isEmpty else { return }
+
+        var files: [MDDeviceFile] = []
+        for row in selectedRows {
+            if let file = outlineView.item(atRow: row) as? MDDeviceFile {
+                files.append(file)
+            }
+        }
+        guard !files.isEmpty else { return }
+
+        if files.count == 1 {
+            exportFile(atIndex: outlineView.selectedRow)
+            return
+        }
+
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = false
+        openPanel.canChooseDirectories = true
+        openPanel.allowsMultipleSelection = false
+        openPanel.message = "选择导出目录"
+        openPanel.beginSheetModal(for: view.window!) { [weak self] result in
+            guard result == .OK, let self = self, let url = openPanel.url else { return }
+            self.showLoading()
+            DispatchQueue.global().async {
+                for file in files {
+                    let dest = url.appendingPathComponent(file.name)
+                    file.copy(dest.path)
+                }
+                DispatchQueue.main.async {
+                    self.hideLoading()
+                }
+            }
+        }
     }
 
     @IBAction func didDoubleClickCell(_: AnyObject?) {
@@ -99,25 +244,72 @@ class FileBrowserViewController: NSViewController, LoadingAble {
         reloadData(withDeviceID: deviceID, appID: appID)
     }
 
-    @IBAction func openFile(_: AnyObject?) {
-        let row = outlineView.selectedRow
-        exportFile(atIndex: row)
+    @IBAction func removeFile(_: AnyObject?) {
+        let selectedRows = outlineView.selectedRowIndexes
+        guard !selectedRows.isEmpty else { return }
+
+        struct ItemInfo {
+            let file: MDDeviceFile
+            let parent: MDDeviceFile
+            let indexInParent: Int
+        }
+
+        var items: [ItemInfo] = []
+        for row in selectedRows {
+            guard let file = outlineView.item(atRow: row) as? MDDeviceFile,
+                  let parent = outlineView.parent(forItem: file) as? MDDeviceFile
+            else { continue }
+            items.append(ItemInfo(file: file, parent: parent, indexInParent: outlineView.childIndex(forItem: file)))
+        }
+        guard !items.isEmpty else { return }
+
+        showLoading()
+        DispatchQueue.global().async {
+            for item in items {
+                _ = item.parent.removeChild(item.file)
+            }
+            DispatchQueue.main.async {
+                self.outlineView.reloadData()
+                self.hideLoading()
+            }
+        }
     }
 
-    @IBAction func removeFile(_: AnyObject?) {
-        let row = outlineView.selectedRow
-        guard let file = outlineView.item(atRow: row) as? MDDeviceFile,
-              let parent = outlineView.parent(forItem: file) as? MDDeviceFile
-        else {
-            // TODO: root dir?
-            return
+    @IBAction func didClickImportButton(_: NSButton) {
+        importFiles()
+    }
+
+    private func importFiles() {
+        let openPanel = NSOpenPanel()
+        openPanel.canChooseFiles = true
+        openPanel.canChooseDirectories = true
+        openPanel.allowsMultipleSelection = true
+        openPanel.beginSheetModal(for: view.window!) { [weak self] result in
+            guard result == .OK, let self = self else { return }
+            let urls = openPanel.urls
+            guard !urls.isEmpty else { return }
+
+            var targetDir: MDDeviceFile?
+            let row = self.outlineView.selectedRow
+            if row >= 0, let file = self.outlineView.item(atRow: row) as? MDDeviceFile {
+                targetDir = file.isDirectory ? file : (self.outlineView.parent(forItem: file) as? MDDeviceFile)
+            }
+            if targetDir == nil {
+                targetDir = self.rootDir
+            }
+
+            guard let dir = targetDir else { return }
+            self.showLoading()
+            DispatchQueue.global().async {
+                for url in urls {
+                    _ = dir.upload(fromLocalPath: url.path)
+                }
+                DispatchQueue.main.async {
+                    self.hideLoading()
+                    self.reloadFiles(nil)
+                }
+            }
         }
-        showLoading()
-        if parent.removeChild(file) {
-            let index = outlineView.childIndex(forItem: file)
-            outlineView.removeItems(at: IndexSet(integer: index), inParent: parent, withAnimation: .effectFade)
-        }
-        hideLoading()
     }
 
     private func exportFile(atIndex index: Int) {
