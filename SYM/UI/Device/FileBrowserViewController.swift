@@ -43,111 +43,48 @@ class FileBrowserViewController: NSViewController, LoadingAble {
 
     private var rootDir: MDDeviceFile!
     private var afcClient: MDAfcClient!
-    private var refreshTimer: DispatchSourceTimer?
+
+    private var searchText: String = ""
+    private var searchResults: [MDDeviceFile] = []
+    private var searchPathMap: [MDDeviceFile: String] = [:]
+    private var isSearchMode: Bool {
+        return !searchText.isEmpty
+    }
+
+    private var searchField: NSSearchField!
 
     override func viewDidLoad() {
         super.viewDidLoad()
+        setupSearchField()
     }
 
-    override func viewWillDisappear() {
-        super.viewWillDisappear()
-        stopRefreshTimer()
+    private func setupSearchField() {
+        let searchField = NSSearchField()
+        searchField.translatesAutoresizingMaskIntoConstraints = false
+        searchField.placeholderString = "搜索文件或文件夹"
+        searchField.sendsWholeSearchString = false
+        searchField.sendsSearchStringImmediately = true
+        searchField.target = self
+        searchField.action = #selector(searchFieldDidChange(_:))
+        self.searchField = searchField
+
+        view.addSubview(searchField)
+        NSLayoutConstraint.activate([
+            searchField.topAnchor.constraint(equalTo: view.topAnchor, constant: 6),
+            searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
+            searchField.widthAnchor.constraint(equalToConstant: 200),
+        ])
     }
 
-    deinit {
-        stopRefreshTimer()
-    }
-
-    private func startRefreshTimer() {
-        stopRefreshTimer()
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + 10, repeating: 10)
-        timer.setEventHandler { [weak self] in
-            self?.autoRefresh()
-        }
-        refreshTimer = timer
-        timer.resume()
-    }
-
-    private func stopRefreshTimer() {
-        refreshTimer?.cancel()
-        refreshTimer = nil
-    }
-
-    private func autoRefresh() {
-        guard let deviceID = self.deviceID, let appID = self.appID else { return }
-
-        var expandedPaths: Set<String> = []
-        collectExpandedPaths(item: nil, into: &expandedPaths)
-
-        DispatchQueue.global().async { [weak self] in
-            guard let self = self else { return }
-            let lockdown = MDLockdown(udid: deviceID)
-            let houseArrest = MDHouseArrest(lockdown: lockdown, appID: appID)
-            let afcClient = MDAfcClient.fileClient(with: houseArrest)
-            let rootDir = MDDeviceFile(afcClient: afcClient)
-            rootDir.path = "."
-            rootDir.isDirectory = true
-            _ = rootDir.children
-
-            self.preloadExpandedPaths(item: rootDir, expandedPaths: expandedPaths)
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self = self else { return }
-                self.afcClient = afcClient
-                self.rootDir = rootDir
-                self.outlineView.reloadData()
-                self.restoreExpanded(item: nil, expandedPaths: expandedPaths)
-            }
-        }
-    }
-
-    private func collectExpandedPaths(item: Any?, into paths: inout Set<String>) {
-        let count: Int
-        if let file = item as? MDDeviceFile {
-            if !outlineView.isItemExpanded(file) { return }
-            paths.insert(file.path)
-            count = outlineView.numberOfChildren(ofItem: file)
+    @objc @IBAction func searchFieldDidChange(_ sender: NSSearchField) {
+        let text = sender.stringValue.trimmingCharacters(in: .whitespaces)
+        searchText = text
+        if !text.isEmpty {
+            performSearch(text)
         } else {
-            count = outlineView.numberOfChildren(ofItem: nil)
-        }
-        for i in 0..<count {
-            let child = item == nil
-                ? outlineView.child(i, ofItem: nil)
-                : outlineView.child(i, ofItem: item)
-            collectExpandedPaths(item: child, into: &paths)
-        }
-    }
-
-    private func preloadExpandedPaths(item: MDDeviceFile, expandedPaths: Set<String>) {
-        if item.isDirectory && expandedPaths.contains(item.path) {
-            _ = item.children
-        }
-        if let children = item.children {
-            for child in children {
-                if child.isDirectory {
-                    preloadExpandedPaths(item: child, expandedPaths: expandedPaths)
-                }
-            }
-        }
-    }
-
-    private func restoreExpanded(item: Any?, expandedPaths: Set<String>) {
-        let count: Int
-        if let file = item as? MDDeviceFile {
-            count = outlineView.numberOfChildren(ofItem: file)
-        } else {
-            count = outlineView.numberOfChildren(ofItem: nil)
-        }
-        for i in 0..<count {
-            let child = item == nil
-                ? outlineView.child(i, ofItem: nil)
-                : outlineView.child(i, ofItem: item)
-            if let file = child as? MDDeviceFile, file.isDirectory,
-               expandedPaths.contains(file.path) {
-                outlineView.expandItem(file)
-                restoreExpanded(item: file, expandedPaths: expandedPaths)
-            }
+            searchResults.removeAll()
+            searchPathMap.removeAll()
+            outlineView.reloadData()
         }
     }
 
@@ -160,7 +97,6 @@ class FileBrowserViewController: NSViewController, LoadingAble {
         self.appID = appID
 
         if deviceID == nil || appID == nil {
-            stopRefreshTimer()
             rootDir = nil
             outlineView.reloadData()
             return
@@ -181,7 +117,42 @@ class FileBrowserViewController: NSViewController, LoadingAble {
                 self.rootDir = rootDir
                 self.outlineView.reloadData()
                 self.hideLoading()
-                self.startRefreshTimer()
+            }
+        }
+    }
+
+    private func performSearch(_ text: String) {
+        guard let root = rootDir else {
+            searchResults.removeAll()
+            searchPathMap.removeAll()
+            outlineView.reloadData()
+            return
+        }
+        showLoading()
+        let lowercased = text.lowercased()
+        DispatchQueue.global().async {
+            var results: [MDDeviceFile] = []
+            var pathMap: [MDDeviceFile: String] = [:]
+            self.collectMatchingFiles(in: root, parentPath: "", searchText: lowercased, results: &results, pathMap: &pathMap)
+            DispatchQueue.main.async {
+                self.searchResults = results
+                self.searchPathMap = pathMap
+                self.outlineView.reloadData()
+                self.hideLoading()
+            }
+        }
+    }
+
+    private func collectMatchingFiles(in dir: MDDeviceFile, parentPath: String, searchText: String, results: inout [MDDeviceFile], pathMap: inout [MDDeviceFile: String]) {
+        guard let children = dir.children else { return }
+        let currentPath = dir.path == "." ? "" : (parentPath.isEmpty ? dir.name : "\(parentPath)/\(dir.name)")
+        for file in children {
+            if file.lowercaseName.contains(searchText) {
+                results.append(file)
+                pathMap[file] = currentPath
+            }
+            if file.isDirectory {
+                collectMatchingFiles(in: file, parentPath: currentPath, searchText: searchText, results: &results, pathMap: &pathMap)
             }
         }
     }
@@ -241,6 +212,9 @@ class FileBrowserViewController: NSViewController, LoadingAble {
         let appID = self.appID
         self.deviceID = nil
         self.appID = nil
+        searchText = ""
+        searchResults.removeAll()
+        searchPathMap.removeAll()
         reloadData(withDeviceID: deviceID, appID: appID)
     }
 
@@ -252,6 +226,28 @@ class FileBrowserViewController: NSViewController, LoadingAble {
             let file: MDDeviceFile
             let parent: MDDeviceFile
             let indexInParent: Int
+        }
+
+        if isSearchMode {
+            var items: [MDDeviceFile] = []
+            for row in selectedRows {
+                if let file = outlineView.item(atRow: row) as? MDDeviceFile {
+                    items.append(file)
+                }
+            }
+            guard !items.isEmpty else { return }
+
+            showLoading()
+            DispatchQueue.global().async {
+                for item in items {
+                    _ = item.remove()
+                }
+                DispatchQueue.main.async {
+                    self.performSearch(self.searchText)
+                    self.hideLoading()
+                }
+            }
+            return
         }
 
         var items: [ItemInfo] = []
@@ -377,6 +373,10 @@ class FileBrowserViewController: NSViewController, LoadingAble {
 
 extension FileBrowserViewController: NSOutlineViewDelegate, NSOutlineViewDataSource {
     func outlineView(_: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
+        if isSearchMode {
+            return item == nil ? searchResults.count : 0
+        }
+
         if let file = item as? MDDeviceFile, file.isDirectory, let children = file.children {
             return children.count
         }
@@ -385,6 +385,10 @@ extension FileBrowserViewController: NSOutlineViewDelegate, NSOutlineViewDataSou
     }
 
     func outlineView(_: NSOutlineView, child index: Int, ofItem item: Any?) -> Any {
+        if isSearchMode {
+            return searchResults[index]
+        }
+
         if let file = item as? MDDeviceFile, file.isDirectory, let children = file.children {
             return children[index]
         }
@@ -393,6 +397,10 @@ extension FileBrowserViewController: NSOutlineViewDelegate, NSOutlineViewDataSou
     }
 
     func outlineView(_: NSOutlineView, isItemExpandable item: Any) -> Bool {
+        if isSearchMode {
+            return false
+        }
+
         if let file = item as? MDDeviceFile, file.isDirectory, let children = file.children {
             return children.count > 0
         }
@@ -416,6 +424,12 @@ extension FileBrowserViewController: NSOutlineViewDelegate, NSOutlineViewDataSou
             }
         } else if tableColumn == outlineView.tableColumns[1] {
             view?.textField?.stringValue = file.date.formattedString
+        } else if outlineView.tableColumns.count > 3, tableColumn == outlineView.tableColumns[3] {
+            if isSearchMode {
+                view?.textField?.stringValue = searchPathMap[file] ?? ""
+            } else {
+                view?.textField?.stringValue = ""
+            }
         } else {
             view?.textField?.stringValue = "\(file.size.readableSize)"
         }

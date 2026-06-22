@@ -62,6 +62,7 @@
                             </allowedToolbarItems>
                             <defaultToolbarItems>
                                 <toolbarItem reference="94a-ji-XOP"/>
+                                <toolbarItem reference="K2G-f9-1aq"/>
                                 <toolbarItem reference="RcY-vv-ZEn"/>
                                 <toolbarItem reference="Imp-Tb-Btn"/>
                                 <toolbarItem reference="U4o-wo-THR"/>
@@ -526,6 +527,42 @@
                                                         </tableCellView>
                                                     </prototypeCellViews>
                                                 </tableColumn>
+                                                <tableColumn identifier="Path" width="120" minWidth="40" maxWidth="1000" id="Path-Col-ID">
+                                                    <tableHeaderCell key="headerCell" lineBreakMode="truncatingTail" borderStyle="border" title="Path">
+                                                        <color key="textColor" name="headerTextColor" catalog="System" colorSpace="catalog"/>
+                                                        <color key="backgroundColor" name="headerColor" catalog="System" colorSpace="catalog"/>
+                                                    </tableHeaderCell>
+                                                    <textFieldCell key="dataCell" lineBreakMode="truncatingTail" selectable="YES" editable="YES" title="Text Cell" id="Path-Cell-ID">
+                                                        <font key="font" metaFont="system"/>
+                                                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                                                        <color key="backgroundColor" name="controlBackgroundColor" catalog="System" colorSpace="catalog"/>
+                                                    </textFieldCell>
+                                                    <tableColumnResizingMask key="resizingMask" resizeWithTable="YES" userResizable="YES"/>
+                                                    <prototypeCellViews>
+                                                        <tableCellView identifier="Path" id="Path-View-ID">
+                                                            <rect key="frame" x="1" y="1" width="120" height="17"/>
+                                                            <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                                            <subviews>
+                                                                <textField verticalHuggingPriority="750" horizontalCompressionResistancePriority="250" translatesAutoresizingMaskIntoConstraints="NO" id="Path-TF-ID">
+                                                                    <rect key="frame" x="0.0" y="2" width="120" height="13"/>
+                                                                    <textFieldCell key="cell" lineBreakMode="truncatingMiddle" sendsActionOnEndEditing="YES" title="Table View Cell" id="Path-TF-Cell-ID">
+                                                                        <font key="font" metaFont="fixedUser" size="11"/>
+                                                                        <color key="textColor" name="controlTextColor" catalog="System" colorSpace="catalog"/>
+                                                                        <color key="backgroundColor" name="controlColor" catalog="System" colorSpace="catalog"/>
+                                                                    </textFieldCell>
+                                                                </textField>
+                                                            </subviews>
+                                                            <constraints>
+                                                                <constraint firstItem="Path-TF-ID" firstAttribute="centerY" secondItem="Path-View-ID" secondAttribute="centerY" id="Path-C1-ID"/>
+                                                                <constraint firstItem="Path-TF-ID" firstAttribute="leading" secondItem="Path-View-ID" secondAttribute="leading" constant="2" id="Path-C2-ID"/>
+                                                                <constraint firstAttribute="trailing" secondItem="Path-TF-ID" secondAttribute="trailing" constant="2" id="Path-C3-ID"/>
+                                                            </constraints>
+                                                            <connections>
+                                                                <outlet property="textField" destination="Path-TF-ID" id="Path-Outlet-ID"/>
+                                                            </connections>
+                                                        </tableCellView>
+                                                    </prototypeCellViews>
+                                                </tableColumn>
                                             </tableColumns>
                                             <connections>
                                                 <action trigger="doubleAction" selector="didDoubleClickCell:" target="Ock-S4-Eux" id="5o6-Wg-hgt"/>
@@ -550,7 +587,7 @@
                             </scrollView>
                         </subviews>
                         <constraints>
-                            <constraint firstItem="1in-jz-F4o" firstAttribute="top" secondItem="rkZ-Do-nkz" secondAttribute="top" id="4Fj-i6-pCT"/>
+                            <constraint firstItem="1in-jz-F4o" firstAttribute="top" secondItem="rkZ-Do-nkz" secondAttribute="top" constant="32" id="4Fj-i6-pCT"/>
                             <constraint firstItem="1in-jz-F4o" firstAttribute="leading" secondItem="rkZ-Do-nkz" secondAttribute="leading" id="Fnd-on-zHw"/>
                             <constraint firstAttribute="trailing" secondItem="1in-jz-F4o" secondAttribute="trailing" id="VVg-fA-Gwy"/>
                             <constraint firstAttribute="bottom" secondItem="1in-jz-F4o" secondAttribute="bottom" id="quD-ue-r1l"/>
