@@ -51,6 +51,10 @@ class FileBrowserViewController: NSViewController, LoadingAble {
         return !searchText.isEmpty
     }
 
+    private var savedExpandedPaths: Set<String> = []
+    private var savedScrollPosition: CGFloat = 0
+    private var shouldRestoreState = false
+
     private var searchField: NSSearchField!
 
     override func viewDidLoad() {
@@ -116,6 +120,7 @@ class FileBrowserViewController: NSViewController, LoadingAble {
                 self.afcClient = afcClient
                 self.rootDir = rootDir
                 self.outlineView.reloadData()
+                self.restoreState()
                 self.hideLoading()
             }
         }
@@ -208,6 +213,7 @@ class FileBrowserViewController: NSViewController, LoadingAble {
     }
 
     @IBAction func reloadFiles(_: AnyObject?) {
+        saveState()
         let deviceID = self.deviceID
         let appID = self.appID
         self.deviceID = nil
@@ -216,6 +222,50 @@ class FileBrowserViewController: NSViewController, LoadingAble {
         searchResults.removeAll()
         searchPathMap.removeAll()
         reloadData(withDeviceID: deviceID, appID: appID)
+    }
+
+    private func saveState() {
+        guard !isSearchMode, rootDir != nil else { return }
+
+        var expanded: Set<String> = []
+        for row in 0..<outlineView.numberOfRows {
+            if let file = outlineView.item(atRow: row) as? MDDeviceFile,
+               file.isDirectory,
+               outlineView.isItemExpanded(file) {
+                expanded.insert(file.path)
+            }
+        }
+        savedExpandedPaths = expanded
+        savedScrollPosition = outlineView.enclosingScrollView?.contentView.bounds.origin.y ?? 0
+        shouldRestoreState = !expanded.isEmpty
+    }
+
+    private func restoreState() {
+        guard shouldRestoreState else { return }
+        shouldRestoreState = false
+
+        var didExpand = true
+        while didExpand {
+            didExpand = false
+            for row in 0..<outlineView.numberOfRows {
+                if let file = outlineView.item(atRow: row) as? MDDeviceFile,
+                   file.isDirectory,
+                   !outlineView.isItemExpanded(file),
+                   savedExpandedPaths.contains(file.path) {
+                    outlineView.expandItem(file)
+                    didExpand = true
+                }
+            }
+        }
+
+        if let scrollView = outlineView.enclosingScrollView {
+            let contentHeight = scrollView.contentView.bounds.height
+            let documentHeight = scrollView.documentView?.bounds.height ?? 0
+            let maxY = max(0, documentHeight - contentHeight)
+            let restoredY = min(savedScrollPosition, maxY)
+            scrollView.contentView.scroll(to: NSPoint(x: 0, y: restoredY))
+            scrollView.reflectScrolledClipView(scrollView.contentView)
+        }
     }
 
     @IBAction func removeFile(_: AnyObject?) {
