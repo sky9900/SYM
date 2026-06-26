@@ -60,6 +60,7 @@ class FileBrowserViewController: NSViewController, LoadingAble {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupSearchField()
+        setupContextMenu()
     }
 
     private func setupSearchField() {
@@ -78,6 +79,57 @@ class FileBrowserViewController: NSViewController, LoadingAble {
             searchField.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -8),
             searchField.widthAnchor.constraint(equalToConstant: 200),
         ])
+    }
+
+    private func setupContextMenu() {
+        let menu = NSMenu()
+        menu.delegate = self
+
+        let refreshItem = NSMenuItem(title: "刷新", action: #selector(reloadFiles(_:)), keyEquivalent: "")
+        refreshItem.target = self
+        refreshItem.tag = 1
+        menu.addItem(refreshItem)
+
+        let importItem = NSMenuItem(title: "导入", action: #selector(contextImport(_:)), keyEquivalent: "")
+        importItem.target = self
+        importItem.tag = 2
+        menu.addItem(importItem)
+
+        let exportItem = NSMenuItem(title: "导出", action: #selector(contextExport(_:)), keyEquivalent: "")
+        exportItem.target = self
+        exportItem.tag = 3
+        menu.addItem(exportItem)
+
+        let deleteItem = NSMenuItem(title: "删除", action: #selector(contextDelete(_:)), keyEquivalent: "")
+        deleteItem.target = self
+        deleteItem.tag = 4
+        menu.addItem(deleteItem)
+
+        outlineView.menu = menu
+    }
+
+    @objc func contextImport(_ sender: NSMenuItem) {
+        let row = outlineView.clickedRow
+        if row >= 0 {
+            outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        importFiles()
+    }
+
+    @objc func contextExport(_ sender: NSMenuItem) {
+        let row = outlineView.clickedRow
+        if row >= 0 {
+            outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        exportSelectedFiles()
+    }
+
+    @objc func contextDelete(_ sender: NSMenuItem) {
+        let row = outlineView.clickedRow
+        if row >= 0 {
+            outlineView.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
+        removeFile(sender)
     }
 
     @objc @IBAction func searchFieldDidChange(_ sender: NSSearchField) {
@@ -488,4 +540,27 @@ extension FileBrowserViewController: NSOutlineViewDelegate, NSOutlineViewDataSou
     }
 
     func outlineViewSelectionDidChange(_: Notification) {}
+}
+
+extension FileBrowserViewController: NSMenuDelegate {
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        let row = outlineView.clickedRow
+        let hasSelection = row >= 0
+        let isDirectory = hasSelection && (outlineView.item(atRow: row) as? MDDeviceFile)?.isDirectory == true
+
+        for item in menu.items {
+            switch item.tag {
+            case 1:
+                item.isHidden = false
+            case 2:
+                item.isHidden = !hasSelection || !isDirectory
+            case 3:
+                item.isHidden = !hasSelection
+            case 4:
+                item.isHidden = !hasSelection
+            default:
+                break
+            }
+        }
+    }
 }
